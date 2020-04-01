@@ -149,10 +149,6 @@ static void set_dload_mode(int on)
 	dload_mode_enabled = on;
 }
 
-static bool get_dload_mode(void)
-{
-	return dload_mode_enabled;
-}
 /*
 static void enable_emergency_dload_mode(void)
 {
@@ -210,10 +206,6 @@ static void enable_emergency_dload_mode(void)
 	pr_err("dload mode is not enabled on target\n");
 }
 */
-static bool get_dload_mode(void)
-{
-	return false;
-}
 #endif
 
 static int panic_prep_restart(struct notifier_block *this,
@@ -279,11 +271,6 @@ static void halt_spmi_pmic_arbiter(void)
 
 static void msm_restart_prepare(const char *cmd)
 {
-#ifdef CONFIG_MSM_PRESERVE_MEM
-	bool need_warm_reset = true;
-#else
-	bool need_warm_reset = true;
-#endif
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	/* Write download mode flags if we're panic'ing
 	 * Write download mode flags if restart_mode says so
@@ -346,7 +333,6 @@ static void msm_restart_prepare(const char *cmd)
 					     restart_reason);
 			}
 		} else if (!strncmp(cmd, "edl", 3)) {
-                        enable_emergency_dload_mode();
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
