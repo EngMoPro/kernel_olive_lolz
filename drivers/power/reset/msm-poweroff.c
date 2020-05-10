@@ -1,5 +1,4 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -58,6 +57,7 @@ static bool scm_deassert_ps_hold_supported;
 static void __iomem *msm_ps_hold;
 static phys_addr_t tcsr_boot_misc_detect;
 static void scm_disable_sdi(void);
+static bool force_warm_reboot;
 
 static int in_panic;
 #ifdef CONFIG_QCOM_DLOAD_MODE
@@ -65,8 +65,7 @@ static int in_panic;
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
  */
-
-static int download_mode;
+static int download_mode = 1;
 #else
 static const int download_mode;
 #endif
@@ -149,7 +148,6 @@ static void set_dload_mode(int on)
 	dload_mode_enabled = on;
 }
 
-/*
 static void enable_emergency_dload_mode(void)
 {
 	int ret;
@@ -164,8 +162,11 @@ static void enable_emergency_dload_mode(void)
 				emergency_dload_mode_addr +
 				(2 * sizeof(unsigned int)));
 
+		/* Need disable the pmic wdt, then the emergency dload mode
+		 * will not auto reset.
+		 */
 		qpnp_pon_wd_config(0);
-
+		/* Make sure all the cookied are flushed to memory */
 		mb();
 	}
 
@@ -173,7 +174,7 @@ static void enable_emergency_dload_mode(void)
 	if (ret)
 		pr_err("Failed to set secure EDLOAD mode: %d\n", ret);
 }
-*/
+
 static int dload_set(const char *val, const struct kernel_param *kp)
 {
 	int ret;
@@ -200,12 +201,11 @@ static void set_dload_mode(int on)
 {
 	return;
 }
-/*
+
 static void enable_emergency_dload_mode(void)
 {
 	pr_err("dload mode is not enabled on target\n");
 }
-*/
 #endif
 
 static int panic_prep_restart(struct notifier_block *this,
@@ -290,7 +290,7 @@ static void msm_restart_prepare(const char *cmd)
 	/* To preserve console-ramoops */
 	qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 
-        if (cmd != NULL) {
+	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_BOOTLOADER);
@@ -341,6 +341,7 @@ static void msm_restart_prepare(const char *cmd)
 					     restart_reason);
 			}
 		} else if (!strncmp(cmd, "edl", 3)) {
+			enable_emergency_dload_mode();
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
@@ -665,6 +666,9 @@ skip_sysfs_create:
 	set_dload_mode(download_mode);
 	if (!download_mode)
 		scm_disable_sdi();
+
+	force_warm_reboot = of_property_read_bool(dev->of_node,
+						"qcom,force-warm-reboot");
 
 	return 0;
 
